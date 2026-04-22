@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import SheetTable from './components/SheetTable.jsx'
 import TableStatsPanel from './components/TableStatsPanel.jsx'
-import ProgressDashboard from './components/ProgressDashboard.jsx'
 import { canGroupByGrade, splitRowsByGradeGroup } from './lib/gradeGroup.js'
 import { parseWorkbook } from './lib/parseWorkbook.js'
 import { apiUrl } from './lib/apiBase.js'
@@ -32,7 +31,6 @@ export default function App() {
   const [dataViewMode, setDataViewMode] = useState('excel')
   const [activeGradeSegment, setActiveGradeSegment] = useState('')
   const [statsRows, setStatsRows] = useState([])
-  const [activeTab, setActiveTab] = useState('lecturas')
 
   const onAdminPicked = useCallback(async (file) => {
     setAdminFile(file)
@@ -241,33 +239,7 @@ export default function App() {
           </div>
         </header>
 
-        <nav className="mb-6 inline-flex rounded-xl border border-slate-200 bg-white/80 p-1 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setActiveTab('lecturas')}
-            className={
-              activeTab === 'lecturas'
-                ? 'rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow'
-                : 'rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100'
-            }
-          >
-            Informe de lecturas
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('progreso')}
-            className={
-              activeTab === 'progreso'
-                ? 'rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow'
-                : 'rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100'
-            }
-          >
-            Panel de progreso ATILA
-          </button>
-        </nav>
-
-        {activeTab === 'lecturas' ? (
-          <>
+        <>
             <section className={`${cardClass} mb-6`}>
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
             <h2 className="text-lg font-semibold text-slate-900">Archivos</h2>
@@ -538,10 +510,7 @@ export default function App() {
                 </p>
               </section>
             )}
-          </>
-        ) : (
-          <ProgressDashboard />
-        )}
+        </>
 
         <footer className="mt-14 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-center text-xs text-slate-500">
           <span>React · Vite · Tailwind</span>
