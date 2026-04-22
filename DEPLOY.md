@@ -13,9 +13,13 @@ Usa la carpeta `automation` como **raíz del repositorio** (o ajusta en Vercel/C
 2. **Root Directory**: `web` (si el repo es solo `automation`, la raíz del proyecto en Vercel apunta a `web`).
 3. **Build**: `npm run build` (por defecto con Vite).
 4. **Output**: `dist`.
-5. **Variables de entorno** (Production, Preview, Development):
+5. **Variables de entorno** (Production **y** Preview; si no, el build de preview seguirá sin API):
    - `VITE_API_BASE_URL` = URL pública de tu API FastAPI, **sin barra final**, por ejemplo `https://tu-servicio.onrender.com`
-6. Vuelve a desplegar tras cambiar variables (Vite las inyecta en el build).
+6. Tras crear o cambiar variables, haz **Redeploy** (Vite inyecta las variables en el momento del build).
+
+### Error `{"detail":"Not Found"}` en el navegador
+
+Eso casi siempre significa que el front en Vercel está llamando a `/api/...` en el **mismo dominio de Vercel**, donde **no existe** la API (el backend va aparte). Solución: define `VITE_API_BASE_URL` apuntando solo al host de tu FastAPI y redeploy. No uses la URL del sitio de Vercel como base de la API.
 
 En local, deja `VITE_API_BASE_URL` vacío: `vite` hace proxy de `/api` a tu uvicorn (ver `web/vite.config.js`).
 

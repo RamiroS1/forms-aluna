@@ -3,7 +3,7 @@ import SheetTable from './components/SheetTable.jsx'
 import TableStatsPanel from './components/TableStatsPanel.jsx'
 import { canGroupByGrade, splitRowsByGradeGroup } from './lib/gradeGroup.js'
 import { parseWorkbook } from './lib/parseWorkbook.js'
-import { apiUrl } from './lib/apiBase.js'
+import { apiUrl, isProductionMissingApiUrl } from './lib/apiBase.js'
 
 const defaultTitle =
   'No es madera, pero parece: así es la ‘revolución plástica’ que llegó al campo'
@@ -128,6 +128,12 @@ export default function App() {
   const buildReport = async () => {
     setApiMsg(null)
     setApiErr(null)
+    if (isProductionMissingApiUrl()) {
+      setApiErr(
+        'Falta la variable VITE_API_BASE_URL en Vercel: es la URL pública de tu API FastAPI (sin barra al final). Añádela en el proyecto Vercel → Settings → Environment Variables, vuelve a desplegar, y asegúrate de que CORS en la API permita tu dominio *.vercel.app.',
+      )
+      return
+    }
     if (!adminFile) {
       setApiErr('Sube primero el Excel del administrador.')
       return
@@ -145,6 +151,11 @@ export default function App() {
       const res = await fetch(apiUrl('/api/build-report'), { method: 'POST', body: fd })
       if (!res.ok) {
         const t = await res.text()
+        if (res.status === 404 && (t.includes('Not Found') || t.includes('"detail"'))) {
+          throw new Error(
+            'API no encontrada en esta URL. Revisa VITE_API_BASE_URL en Vercel (debe apuntar a tu servidor FastAPI, no a la URL del front).',
+          )
+        }
         throw new Error(t || res.statusText)
       }
       const blob = await res.blob()
@@ -164,8 +175,25 @@ export default function App() {
 
   const checkHealth = async () => {
     setApiErr(null)
+    if (isProductionMissingApiUrl()) {
+      setApiErr(
+        'En Vercel, añade la variable VITE_API_BASE_URL con la URL pública de tu API (p. ej. https://forms-aluna-api.onrender.com) y vuelve a desplegar. En local, usa npm run dev con la API en el puerto 8001 (proxy en vite.config).',
+      )
+      return
+    }
     try {
       const r = await fetch(apiUrl('/api/health'))
+      if (!r.ok) {
+        const t = await r.text()
+        if (r.status === 404) {
+          setApiErr(
+            'No hay API en esta URL. Si desplegaste solo el front en Vercel, VITE_API_BASE_URL debe ser la base de tu FastAPI (Render/Railway/Fly, etc.), no la URL de la web.',
+          )
+          return
+        }
+        setApiErr(t || r.statusText)
+        return
+      }
       const j = await r.json()
       setApiMsg(
         j.default_template_exists
@@ -174,7 +202,7 @@ export default function App() {
       )
     } catch {
       setApiErr(
-        'No se pudo conectar con la API. Ejecuta: python3 -m uvicorn api.main:app --port 8001 (desde automation/).',
+        'No se pudo conectar con la API. En local: python3 -m uvicorn api.main:app --port 8001 (carpeta automation). En Vercel: configura VITE_API_BASE_URL y CORS en el servidor de la API.',
       )
     }
   }
@@ -191,6 +219,20 @@ export default function App() {
       </div>
 
       <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-12">
+        {isProductionMissingApiUrl() && (
+          <div
+            className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm"
+            role="status"
+          >
+            <p className="font-semibold">Falta configurar la API en Vercel</p>
+            <p className="mt-1 leading-relaxed text-amber-900/95">
+              El front no incluye el backend Python. En Vercel → Project → Settings → Environment Variables, crea{' '}
+              <code className="rounded bg-amber-100/90 px-1.5 py-0.5 font-mono text-xs">VITE_API_BASE_URL</code> con la
+              URL base de tu FastAPI (sin <code className="font-mono">/</code> al final) y vuelve a desplegar. Añade tu
+              dominio en CORS de la API si hace falta.
+            </p>
+          </div>
+        )}
         <header className="mb-10 lg:mb-12">
           <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-gradient-to-br from-white via-emerald-50/35 to-sky-50/45 p-6 shadow-xl shadow-slate-900/[0.06] ring-1 ring-white/70 sm:p-8">
             <div

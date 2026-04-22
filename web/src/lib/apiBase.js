@@ -13,3 +13,8 @@ export function apiUrl(path) {
   const p = path.startsWith('/') ? path : `/${path}`
   return `${getApiBaseUrl()}${p}`
 }
+
+/** En producción (Vercel) sin VITE_API_BASE_URL las llamadas a /api fallan: el backend no vive en el mismo sitio. */
+export function isProductionMissingApiUrl() {
+  return Boolean(import.meta.env.PROD) && getApiBaseUrl() === ''
+}
