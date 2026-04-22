@@ -1,5 +1,7 @@
 # Automatización: informe de lecturas + panel ATILA
 
+Repositorio: [https://github.com/RamiroS1/forms-aluna](https://github.com/RamiroS1/forms-aluna)
+
 Aplicación **React (Vite) + Tailwind** en `web/`, y **API FastAPI** en `api/` (Python) para generar el Excel y resumir el progreso ATILA.
 
 ## Desarrollo local
@@ -25,11 +27,10 @@ En desarrollo, el proxy de Vite envía `/api` al puerto `8001` (ver `web/vite.co
 
 ## GitHub y Vercel
 
-- El repositorio Git está inicializado en esta carpeta (`git init` ya hecho, rama `main`). Configura tu nombre y correo, luego haz el primer commit:
-  - `git config user.name "Tu nombre"`
-  - `git config user.email "tu@email.com"`
-  - `git commit -m "Initial commit"`
-  - `git remote add origin …` y `git push -u origin main`
+- Remoto configurado: `origin` → `https://github.com/RamiroS1/forms-aluna.git` · rama `main`
+- El primer commit ya está hecho en esta copia. Para subir cambios (necesitas iniciar sesión en GitHub en tu máquina):
+  - HTTPS: `git push -u origin main` (Git pedirá usuario y un **Personal Access Token** con permiso `repo`, no la contraseña de la cuenta)
+  - O SSH: `git remote set-url origin git@github.com:RamiroS1/forms-aluna.git` y `git push -u origin main` (con clave SSH añadida en GitHub)
 - Configura en Vercel el **root** del front en `web` y la variable `VITE_API_BASE_URL` apuntando a tu API pública.
 - Instrucciones detalladas: [DEPLOY.md](./DEPLOY.md)
 
