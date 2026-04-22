@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Scrollbar fina en tablas largas */
+.table-scroll-tl::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.table-scroll-tl::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300 hover:bg-slate-400;
+}
+.table-scroll-tl::-webkit-scrollbar-track {
+  @apply rounded-full bg-slate-100;
+}
