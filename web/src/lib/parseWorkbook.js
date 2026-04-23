@@ -11,11 +11,59 @@ function uniqueHeaders(headers) {
 }
 
 /**
+ * Rango de columnas usado en el grid (0-based), sin depender de la primera fila.
+ * Con encabezados fusionados o filas más cortas, `sheet_to_json` dejaba pocos
+ * elementos y las respuestas a la derecha (p. ej. tras Grado/grupo) se desalineaban
+ * o quedaban vacías en el objeto de la fila.
+ */
+function maxColIndexInSheet(ws) {
+  let m = -1
+  if (ws['!ref']) {
+    const d = XLSX.utils.decode_range(ws['!ref'])
+    m = Math.max(m, d.e.c)
+  }
+  for (const k of Object.keys(ws)) {
+    if (k[0] === '!') continue
+    m = Math.max(m, XLSX.utils.decode_cell(k).c)
+  }
+  return m
+}
+
+function padRowToWidth(r, width) {
+  const out = new Array(width)
+  for (let i = 0; i < width; i += 1) {
+    const v = r[i]
+    out[i] = v === undefined || v === null ? '' : v
+  }
+  return out
+}
+
+/**
+ * @param {ArrayBuffer} arrayBuffer
+ * @param {string} [fileName] — si termina en .csv, se lee como texto (misma estructura que Excel de una hoja).
+ * @returns {{ names: string[], sheets: Record<string, { columns: string[], rows: Record<string, unknown>[] }> }}
+ */
+export function parseDataFile(arrayBuffer, fileName = '') {
+  const lower = (fileName || '').toLowerCase()
+  let wb
+  if (lower.endsWith('.csv')) {
+    const text = new TextDecoder('utf-8').decode(arrayBuffer)
+    wb = XLSX.read(text, { type: 'string', raw: false, cellDates: true })
+  } else {
+    wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
+  }
+  return workbookToAppModel(wb)
+}
+
+/**
  * @param {ArrayBuffer} arrayBuffer
  * @returns {{ names: string[], sheets: Record<string, { columns: string[], rows: Record<string, unknown>[] }> }}
  */
 export function parseWorkbook(arrayBuffer) {
-  const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true })
+  return parseDataFile(arrayBuffer, '')
+}
+
+function workbookToAppModel(wb) {
   const names = wb.SheetNames
   const sheets = {}
 
@@ -30,11 +78,12 @@ export function parseWorkbook(arrayBuffer) {
       sheets[name] = { columns: [], rows: [] }
       continue
     }
-    const width = Math.max(...matrix.map((r) => r.length))
+    const fromSheet = maxColIndexInSheet(ws) + 1
+    const fromRows = Math.max(1, ...matrix.map((r) => (Array.isArray(r) ? r.length : 0)))
+    const width = Math.max(1, fromSheet, fromRows)
     const normalized = matrix.map((r) => {
-      const copy = [...r]
-      while (copy.length < width) copy.push('')
-      return copy
+      const arr = Array.isArray(r) ? r : []
+      return padRowToWidth(arr, width)
     })
     const headerCells = normalized[0].map((c) => (c == null ? '' : String(c)))
     const columns = uniqueHeaders(headerCells)

@@ -7,11 +7,19 @@ Ejecutar desde esta carpeta:
 
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import streamlit as st
 
-from informe_builder import BuildConfig, build_workbook_bytes, default_template_path
+from informe_builder import (
+    BuildConfig,
+    build_workbook_bytes,
+    build_workbook_zip_by_institution,
+    default_template_path,
+    load_admin_dataframe,
+    unique_institution_values,
+)
 
 st.set_page_config(page_title="Informe de lecturas", layout="wide")
 st.title("Informe de lecturas — Excel administrador → plantilla")
@@ -24,7 +32,7 @@ with st.sidebar:
     st.header("Parámetros")
     institution = st.text_input(
         "Filtrar institución (contiene)",
-        value="Aurelio Martínez Mutis",
+        value="",
         help="Solo las filas cuya columna «Institución o colegio» contenga este texto "
         "se reparten en hojas por grado-grupo. El resto va a OTROS.",
     )
@@ -35,6 +43,34 @@ with st.sidebar:
     report_date = st.text_input(
         "Fecha del informe (celda L7)",
         value="02 de marzo",
+    )
+    asignatura = st.text_input(
+        "Asignatura (celda I2)",
+        value="LENGUA CASTELLANA",
+        help="Aparece junto a «ASIGNATURA» en la plantilla (no confundir con elaborado por).",
+    )
+    docente = st.text_input(
+        "Docente (celda I3)",
+        value="",
+        help="Aparece junto a «DOCENTE» en la plantilla.",
+    )
+    elaborado_por = st.text_input(
+        "Elaborado por (celda I4)",
+        value="",
+        help="Aparece junto a «ELABORADO POR» (quien firma o elabora el informe; no es la asignatura).",
+    )
+    institution_label = st.text_input(
+        "Institución en portada (celda D2) — solo modo un solo Excel",
+        value="",
+        help="Si vacío, no se cambia D2. En export ZIP, D2 se rellena por colegio automáticamente.",
+    )
+    export_mode = st.radio(
+        "Exportación",
+        options=("single", "zip_by_institution"),
+        format_func=lambda v: "Un solo Excel"
+        if v == "single"
+        else "Un Excel por colegio (archivo .zip)",
+        index=0,
     )
     incluir_otras = st.checkbox(
         "Incluir otras instituciones en la hoja OTROS",
@@ -50,8 +86,8 @@ with st.sidebar:
     )
 
 admin_file = st.file_uploader(
-    "Archivo del administrador (.xlsx)",
-    type=["xlsx"],
+    "Archivo del administrador (.xlsx, .xlsm o .csv)",
+    type=["xlsx", "xlsm", "csv"],
 )
 
 if not admin_file:
@@ -69,25 +105,74 @@ if not template_path.is_file():
     st.error(f"No se encontró la plantilla en: {template_path}")
     st.stop()
 
+source_name = getattr(admin_file, "name", "") or ""
+
+zip_filter: list | None = None
+if export_mode == "zip_by_institution":
+    try:
+        df_zip, _ = load_admin_dataframe(io.BytesIO(admin_file.getvalue()), source_filename=source_name)
+        all_schools = unique_institution_values(df_zip)
+    except (KeyError, ValueError) as e:
+        st.error(f"No se pudo leer el archivo para el ZIP por colegio: {e}")
+        st.stop()
+    if not all_schools:
+        st.warning("No hay valores en «Institución o colegio» en la primera hoja; no se puede generar un ZIP por colegio.")
+        st.stop()
+    pick = st.multiselect(
+        "Colegios a incluir en el ZIP (primera hoja del administrador)",
+        options=all_schools,
+        default=all_schools,
+    )
+    if not pick:
+        st.error("Elige al menos un colegio o cambia a un solo informe.")
+        st.stop()
+    zip_filter = pick
+
 config = BuildConfig(
     institution_contains=institution.strip(),
     reading_title=reading_title.strip(),
     report_date=report_date.strip(),
+    asignatura=asignatura.strip(),
+    docente=docente.strip(),
+    elaborado_por=elaborado_por.strip(),
+    institution_label=institution_label.strip(),
     only_primary_institution=not incluir_otras,
 )
 
 try:
-    out_bytes = build_workbook_bytes(admin_file, template_path, config)
+    if export_mode == "zip_by_institution":
+        out_bytes = build_workbook_zip_by_institution(
+            admin_file,
+            template_path,
+            config,
+            source_filename=source_name,
+            institution_filter=zip_filter,
+        )
+    else:
+        out_bytes = build_workbook_bytes(
+            admin_file,
+            template_path,
+            config,
+            source_filename=source_name,
+        )
 except Exception as e:
     st.error(f"Error al generar el archivo: {e}")
     st.exception(e)
     st.stop()
 
 safe_name = Path(admin_file.name).stem[:40] or "informe"
-st.success("Listo. Descarga el informe generado.")
-st.download_button(
-    label="Descargar informe (.xlsx)",
-    data=out_bytes,
-    file_name=f"informe_lecturas_{safe_name}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+st.success("Listo. Descarga el archivo generado.")
+if export_mode == "zip_by_institution":
+    st.download_button(
+        label="Descargar ZIP (un informe por colegio)",
+        data=out_bytes,
+        file_name=f"informe_lecturas_por_colegio_{safe_name}.zip",
+        mime="application/zip",
+    )
+else:
+    st.download_button(
+        label="Descargar informe (.xlsx)",
+        data=out_bytes,
+        file_name=f"informe_lecturas_{safe_name}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )

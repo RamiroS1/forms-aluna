@@ -4,8 +4,8 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
-echo "Iniciando API en http://127.0.0.1:8001 ..."
-python3 -m uvicorn api.main:app --host 0.0.0.0 --port 8001 &
+echo "Iniciando API en http://127.0.0.1:8001 (con --reload) ..."
+python3 -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8001 &
 UV_PID=$!
 
 cleanup() {

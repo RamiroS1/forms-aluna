@@ -25,6 +25,8 @@ python3 -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8001
 
 En desarrollo, el proxy de Vite envía `/api` al puerto `8001` (ver `web/vite.config.js`).
 
+Si al subir un **.csv** u otra actualización de la API sigue saliendo el mensaje antiguo *«Se requiere un archivo .xlsx del administrador»*, el proceso de **uvicorn** sigue con código viejo: detén la API (Ctrl+C) y vuelve a arrancarla, o usa `./start-dev.sh` (incluye `--reload`).
+
 ## GitHub y Vercel
 
 - Remoto configurado: `origin` → `https://github.com/RamiroS1/forms-aluna.git` · rama `main`

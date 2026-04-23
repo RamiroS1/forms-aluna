@@ -55,19 +55,31 @@ export default function SheetTable({
   const [openValuePicker, setOpenValuePicker] = useState(null)
   const [pickerSearch, setPickerSearch] = useState('')
 
-  const dateColumnKeys = useMemo(() => detectDateColumns(columns, rows), [columns, rows])
+  /** Filas con todas las claves de columnas (evita celdas vacías por claves faltantes). */
+  const rowsFilled = useMemo(() => {
+    if (!columns?.length) return rows
+    return rows.map((r) => {
+      const o = { ...r }
+      for (const c of columns) {
+        if (!(c in o)) o[c] = ''
+      }
+      return o
+    })
+  }, [rows, columns])
+
+  const dateColumnKeys = useMemo(() => detectDateColumns(columns, rowsFilled), [columns, rowsFilled])
 
   const uniqueByColumn = useMemo(() => {
     const m = {}
     for (const col of columns) {
       const s = new Set()
-      for (const r of rows) {
+      for (const r of rowsFilled) {
         s.add(normalizeCellDisplay(r[col]))
       }
       m[col] = [...s].sort((a, b) => a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' }))
     }
     return m
-  }, [columns, rows])
+  }, [columns, rowsFilled])
 
   const setFilter = (updater) => {
     const next = typeof updater === 'function' ? updater(globalFilter ?? '') : updater
@@ -106,10 +118,13 @@ export default function SheetTable({
     setValueAllowedByColumn((prev) => ({ ...prev, [colId]: new Set() }))
   }
 
+  // No usar accessorKey: los títulos de Gravity suelen ser «1. ¿Pregunta…?»; TanStack
+  // interpreta puntos como ruta anidada (a.b) y las celdas quedan vacías.
   const tableColumns = useMemo(
     () =>
       columns.map((key) => ({
-        accessorKey: key,
+        id: key,
+        accessorFn: (row) => (row == null ? undefined : row[key]),
         header: key,
         enableSorting: true,
         enableColumnFilter: true,
@@ -123,7 +138,10 @@ export default function SheetTable({
           const v = getValue()
           const text = v == null ? '' : String(v)
           return (
-            <span className="block max-w-[min(24rem,55vw)] truncate" title={text}>
+            <span
+              className="block min-w-[10rem] max-w-[min(40rem,85vw)] whitespace-pre-wrap break-words text-slate-800"
+              title={text.length > 500 ? text : undefined}
+            >
               {text}
             </span>
           )
@@ -133,8 +151,8 @@ export default function SheetTable({
   )
 
   const filteredRowsPrecheck = useMemo(() => {
-    return rows.filter((r) => rowPassesValuePickers(r, columns, valueAllowedByColumn))
-  }, [rows, columns, valueAllowedByColumn])
+    return rowsFilled.filter((r) => rowPassesValuePickers(r, columns, valueAllowedByColumn))
+  }, [rowsFilled, columns, valueAllowedByColumn])
 
   const table = useReactTable({
     data: filteredRowsPrecheck,
@@ -326,7 +344,7 @@ export default function SheetTable({
       )}
 
       <div className="table-scroll-tl max-h-[min(70vh,720px)] overflow-auto rounded-xl border border-slate-200 bg-white shadow-inner shadow-slate-900/[0.03]">
-        <table className="min-w-full border-collapse text-left text-xs sm:text-sm">
+        <table className="w-max min-w-full border-collapse text-left text-xs sm:text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-slate-200 bg-slate-100/95">

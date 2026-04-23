@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import SheetTable from './components/SheetTable.jsx'
 import TableStatsPanel from './components/TableStatsPanel.jsx'
 import { canGroupByGrade, splitRowsByGradeGroup } from './lib/gradeGroup.js'
-import { parseWorkbook } from './lib/parseWorkbook.js'
+import { uniqueInstitutionsSorted } from './lib/tableStats.js'
+import { parseDataFile } from './lib/parseWorkbook.js'
 import { apiUrl, isProductionMissingApiUrl } from './lib/apiBase.js'
 
 const defaultTitle =
@@ -21,9 +22,14 @@ export default function App() {
   const [activeSheet, setActiveSheet] = useState('')
   const [sheetFilter, setSheetFilter] = useState('')
   const [globalSearch, setGlobalSearch] = useState({})
-  const [institution, setInstitution] = useState('Aurelio Martínez Mutis')
+  const [institution, setInstitution] = useState('')
   const [readingTitle, setReadingTitle] = useState(defaultTitle)
   const [reportDate, setReportDate] = useState('02 de marzo')
+  const [asignatura, setAsignatura] = useState('LENGUA CASTELLANA')
+  const [docente, setDocente] = useState('')
+  const [elaboradoPor, setElaboradoPor] = useState('')
+  const [exportMode, setExportMode] = useState('single')
+  const [institutionLabel, setInstitutionLabel] = useState('')
   const [includeOthers, setIncludeOthers] = useState(false)
   const [busy, setBusy] = useState(false)
   const [apiMsg, setApiMsg] = useState(null)
@@ -31,6 +37,7 @@ export default function App() {
   const [dataViewMode, setDataViewMode] = useState('excel')
   const [activeGradeSegment, setActiveGradeSegment] = useState('')
   const [statsRows, setStatsRows] = useState([])
+  const [zipInstitutionSelected, setZipInstitutionSelected] = useState([])
 
   const onAdminPicked = useCallback(async (file) => {
     setAdminFile(file)
@@ -41,7 +48,7 @@ export default function App() {
     setActiveGradeSegment('')
     if (!file) return
     const buf = await file.arrayBuffer()
-    const data = parseWorkbook(buf)
+    const data = parseDataFile(buf, file.name || '')
     setParsed(data)
     if (data.names.length) {
       setActiveSheet(data.names[0])
@@ -51,6 +58,22 @@ export default function App() {
 
   const activeMeta = parsed && activeSheet ? parsed.sheets[activeSheet] : null
   const canGroup = !!(activeMeta && canGroupByGrade(activeMeta.columns))
+
+  const firstSheetMeta = useMemo(() => {
+    if (!parsed?.names?.length) return null
+    return parsed.sheets[parsed.names[0]] ?? null
+  }, [parsed])
+
+  const zipInstitutionOptions = useMemo(() => {
+    if (!firstSheetMeta) return []
+    return uniqueInstitutionsSorted(firstSheetMeta.rows, firstSheetMeta.columns)
+  }, [firstSheetMeta])
+
+  const zipOptsKey = useMemo(() => zipInstitutionOptions.join('\u0000'), [zipInstitutionOptions])
+
+  useEffect(() => {
+    setZipInstitutionSelected([...zipInstitutionOptions])
+  }, [zipOptsKey])
 
   const gradeSplit = useMemo(() => {
     if (!activeMeta || !canGroupByGrade(activeMeta.columns)) return null
@@ -138,6 +161,10 @@ export default function App() {
       setApiErr('Sube primero el Excel del administrador.')
       return
     }
+    if (exportMode === 'zip_by_institution' && zipInstitutionOptions.length > 0 && zipInstitutionSelected.length === 0) {
+      setApiErr('Marca al menos un colegio en el ZIP o vuelve al modo de un solo informe.')
+      return
+    }
     setBusy(true)
     try {
       const fd = new FormData()
@@ -146,7 +173,15 @@ export default function App() {
       fd.append('institution_contains', institution)
       fd.append('reading_title', readingTitle)
       fd.append('report_date', reportDate)
+      fd.append('asignatura', asignatura)
+      fd.append('docente', docente)
+      fd.append('elaborado_por', elaboradoPor)
+      fd.append('institution_label', institutionLabel)
+      fd.append('export_mode', exportMode)
       fd.append('only_primary_institution', includeOthers ? 'false' : 'true')
+      if (exportMode === 'zip_by_institution' && zipInstitutionOptions.length > 0) {
+        fd.append('zip_institutions_json', JSON.stringify(zipInstitutionSelected))
+      }
 
       const res = await fetch(apiUrl('/api/build-report'), { method: 'POST', body: fd })
       if (!res.ok) {
@@ -162,10 +197,18 @@ export default function App() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `informe_lecturas_${adminFile.name.replace(/\.xlsx?$/i, '')}.xlsx`
+      const stem = adminFile.name.replace(/\.(xlsx|xlsm|csv|xls)$/i, '') || 'informe'
+      a.download =
+        exportMode === 'zip_by_institution'
+          ? `informe_lecturas_por_colegio_${stem}.zip`
+          : `informe_lecturas_${stem}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
-      setApiMsg('Informe generado y descargado.')
+      setApiMsg(
+        exportMode === 'zip_by_institution'
+          ? 'Se descargó un ZIP con un Excel por colegio (columna «Institución o colegio»).'
+          : 'Informe generado y descargado.',
+      )
     } catch (e) {
       setApiErr(e.message || String(e))
     } finally {
@@ -286,7 +329,7 @@ export default function App() {
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
             <h2 className="text-lg font-semibold text-slate-900">Archivos</h2>
             <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-              .xlsx · .xlsm
+              .xlsx · .xlsm · .csv
             </span>
           </div>
           <div className="mt-5 grid gap-6 sm:grid-cols-2">
@@ -294,7 +337,7 @@ export default function App() {
               Excel administrador <span className="font-normal text-rose-600">(requerido)</span>
               <input
                 type="file"
-                accept=".xlsx,.xlsm"
+                accept=".xlsx,.xlsm,.csv"
                 className={fileInputClass}
                 onChange={(e) => onAdminPicked(e.target.files?.[0] ?? null)}
               />
@@ -309,13 +352,25 @@ export default function App() {
               />
             </label>
           </div>
-          <p className="mt-5 text-sm leading-relaxed text-slate-500">
-            Si no subes plantilla, el servidor usa{' '}
-            <code className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
-              FORMATO_LEC_AURELIO MARTÍNEZ MUTIS.xlsx
-            </code>{' '}
-            en la carpeta del proyecto.
-          </p>
+          <div className="mt-5 space-y-2 text-sm leading-relaxed text-slate-500">
+            <p>
+              <strong className="font-semibold text-slate-700">Excel administrador:</strong> export de respuestas (cada
+              lectura o cuento puede traer columnas de preguntas distintas). Debe conservar «Institución o colegio»,
+              «Grado» e «Indica el número o letra del grado» tal como salen del formulario.
+            </p>
+            <p>
+              <strong className="font-semibold text-slate-700">Plantilla (opcional):</strong> solo el .xlsx de
+              maquetación del informe (hoja «10-1» o una sola hoja con celdas B7, D2, I2 a I4, datos desde fila 8). No
+              subas aquí el mismo archivo de respuestas.
+            </p>
+            <p>
+              Si no subes plantilla, el servidor usa{' '}
+              <code className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700">
+                FORMATO_LEC_AURELIO MARTÍNEZ MUTIS.xlsx
+              </code>{' '}
+              en la carpeta del proyecto.
+            </p>
+          </div>
             </section>
 
             <section className={`${cardClass} mb-6`}>
@@ -349,6 +404,131 @@ export default function App() {
               Fecha del informe (celda L7)
               <input className={inputClass} value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
             </label>
+            <label className="block text-sm font-semibold text-slate-800">
+              Asignatura (celda I2, junto a «ASIGNATURA»)
+              <input
+                className={inputClass}
+                value={asignatura}
+                onChange={(e) => setAsignatura(e.target.value)}
+                placeholder="Ej. Lengua castellana"
+              />
+            </label>
+            <label className="block text-sm font-semibold text-slate-800">
+              Docente (celda I3, junto a «DOCENTE»)
+              <input
+                className={inputClass}
+                value={docente}
+                onChange={(e) => setDocente(e.target.value)}
+                placeholder="Nombre del docente"
+              />
+            </label>
+            <label className="block text-sm font-semibold text-slate-800">
+              Elaborado por (celda I4, junto a «ELABORADO POR»; no es la asignatura)
+              <input
+                className={inputClass}
+                value={elaboradoPor}
+                onChange={(e) => setElaboradoPor(e.target.value)}
+                placeholder="Quien firma o elabora el informe"
+              />
+            </label>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-800">Exportación</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Si el archivo trae varios colegios, puedes bajar un <strong>ZIP</strong> con un Excel por
+                institución (mismos textos B7, fechas, docente, etc. en todos; en <strong>D2</strong> se escribe
+                el nombre de cada colegio, no un texto fijo de plantilla).
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="radio"
+                    name="exportMode"
+                    className="h-4 w-4 text-indigo-600"
+                    checked={exportMode === 'single'}
+                    onChange={() => setExportMode('single')}
+                  />
+                  Un solo informe (un .xlsx)
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-800">
+                  <input
+                    type="radio"
+                    name="exportMode"
+                    className="h-4 w-4 text-indigo-600"
+                    checked={exportMode === 'zip_by_institution'}
+                    onChange={() => setExportMode('zip_by_institution')}
+                  />
+                  Un Excel por colegio (.zip)
+                </label>
+              </div>
+            </div>
+            {exportMode === 'single' && (
+              <label className="block text-sm font-semibold text-slate-800">
+                Nombre de institución en portada (celda D2, opcional)
+                <input
+                  className={inputClass}
+                  value={institutionLabel}
+                  onChange={(e) => setInstitutionLabel(e.target.value)}
+                  placeholder="Si lo dejas vacío, no se sustituye el nombre en D2 (p. ej. texto de la plantilla de ejemplo)"
+                />
+              </label>
+            )}
+            {exportMode === 'zip_by_institution' && (
+              <>
+                <p className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+                  En este modo se ignoran «Institución (contiene)» e «Incluir otras en OTROS» al partir por colegio: cada
+                  archivo solo lleva filas cuyo «Institución o colegio» coincide exactamente con ese centro. En la portada
+                  (celda D2) irá el nombre de cada colegio, sustituyendo el texto fijo de la plantilla aunque D2 esté
+                  en celdas fusionadas.
+                </p>
+                {zipInstitutionOptions.length > 0 && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-sm font-semibold text-slate-800">Colegios a incluir en el ZIP</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Valores de «Institución o colegio» en la primera hoja del administrador
+                      {parsed?.names?.length > 1
+                        ? ` (${parsed.names[0]}; el informe se genera a partir de esa hoja, como al subir a la API).`
+                        : ' (la misma que usa el generador).'}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        className="font-medium text-indigo-600 underline"
+                        onClick={() => setZipInstitutionSelected([...zipInstitutionOptions])}
+                      >
+                        Seleccionar todas
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        type="button"
+                        className="font-medium text-indigo-600 underline"
+                        onClick={() => setZipInstitutionSelected([])}
+                      >
+                        Ninguna
+                      </button>
+                    </div>
+                    <ul className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
+                      {zipInstitutionOptions.map((name) => (
+                        <li key={name} className="flex items-start gap-2.5 text-sm text-slate-800">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600"
+                            checked={zipInstitutionSelected.includes(name)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setZipInstitutionSelected((p) => [...p, name])
+                              } else {
+                                setZipInstitutionSelected((p) => p.filter((x) => x !== name))
+                              }
+                            }}
+                          />
+                          <span className="min-w-0 break-words leading-snug">{name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )}
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm">
               <input
                 type="checkbox"
@@ -359,7 +539,8 @@ export default function App() {
               <span>
                 <span className="font-semibold text-slate-800">Incluir otras instituciones en OTROS</span>
                 <span className="mt-0.5 block text-slate-500">
-                  Desmarcado: solo tu institución; OTROS = filas sin grado/grupo claro.
+                  Solo aplica al modo <strong>un solo informe</strong>. Desmarcado: solo filas de la institución
+                  indicada arriba; OTROS = filas sin grado/grupo claro.
                 </span>
               </span>
             </label>
@@ -376,6 +557,8 @@ export default function App() {
                   <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   Generando…
                 </>
+              ) : exportMode === 'zip_by_institution' ? (
+                'Generar ZIP (un informe por colegio)'
               ) : (
                 'Generar y descargar Excel'
               )}

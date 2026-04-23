@@ -35,6 +35,20 @@ La API no va incluida en el build de Vercel. Opciones habituales: [Render](https
   - `CORS_ALLOW_VERCEL=0` — desactiva el patrón `*.vercel.app` si no lo usas
 - Sube a Git la plantilla `FORMATO_LEC_…` si usas el informe por defecto, o el usuario debe subirla en la UI.
 
+### 2.1) Railway (pasos concretos)
+
+1. Sube el código a **GitHub** (la carpeta `automation` puede ser la raíz del repo o un subdirectorio; apunta a la raíz **donde** están `api/`, `informe_builder.py` y `requirements.txt`).
+2. En [railway.app](https://railway.app): **New project** → **Deploy from GitHub** → elige el repo.
+3. Si el repo contiene monorepo: en el servicio, **Settings → Root Directory** = la ruta a `automation` (por ejemplo `FORMATOS FORMULARIOS/automation` si aplica).
+4. **Settings → Deploy → Custom Start Command** (o *Start Command*):
+   ```bash
+   uvicorn api.main:app --host 0.0.0.0 --port $PORT
+   ```
+5. **Variables** (la mayoría se generan solas; Railway inyecta `PORT`):
+   - Si usas un dominio propio en el front, añade en la API: `CORS_ALLOW_ORIGINS=https://tu-proyecto.vercel.app,https://www.tu-dominio.com` (sin espacios extra).
+6. Tras el deploy, anota la URL pública (p. ej. `https://informe-xxx.up.railway.app`). Prueba: `GET https://…/api/health`.
+7. Esa URL **sin barra al final** es la que pones en Vercel como `VITE_API_BASE_URL` y haces **Redeploy** del front.
+
 ## 3) Comprobar
 
 - API: `GET {VITE_API_BASE_URL}/api/health`

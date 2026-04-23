@@ -165,3 +165,25 @@ export function computeTableStats(rows, columns) {
     },
   }
 }
+
+/**
+ * Valores únicos de «Institución o colegio», orden estables (p. ej. mismo criterio que el generador).
+ * @param {Record<string, unknown>[]} rows
+ * @param {string[]} columns
+ * @returns {string[]}
+ */
+export function uniqueInstitutionsSorted(rows, columns) {
+  if (!columns?.length || !columns.includes(COL_INST)) return []
+  const seen = new Set()
+  const out = []
+  for (const r of rows) {
+    const v = r[COL_INST]
+    if (v == null || v === '') continue
+    const s = String(v).trim()
+    if (!s || seen.has(s)) continue
+    seen.add(s)
+    out.push(s)
+  }
+  out.sort((a, b) => (a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : a < b ? -1 : a > b ? 1 : 0))
+  return out
+}
