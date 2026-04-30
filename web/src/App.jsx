@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import SheetTable from './components/SheetTable.jsx'
 import TableStatsPanel from './components/TableStatsPanel.jsx'
 import { canGroupByGrade, splitRowsByGradeGroup } from './lib/gradeGroup.js'
-import { uniqueInstitutionsSorted } from './lib/tableStats.js'
+import { COL_INST, uniqueInstitutionsSorted } from './lib/tableStats.js'
 import { parseDataFile } from './lib/parseWorkbook.js'
 import { apiUrl, isProductionMissingApiUrl } from './lib/apiBase.js'
 
@@ -46,6 +46,8 @@ export default function App() {
     setGlobalSearch({})
     setDataViewMode('excel')
     setActiveGradeSegment('')
+    setInstitution('')
+    setInstitutionLabel('')
     if (!file) return
     const buf = await file.arrayBuffer()
     const data = parseDataFile(buf, file.name || '')
@@ -67,6 +69,22 @@ export default function App() {
   const zipInstitutionOptions = useMemo(() => {
     if (!firstSheetMeta) return []
     return uniqueInstitutionsSorted(firstSheetMeta.rows, firstSheetMeta.columns)
+  }, [firstSheetMeta])
+
+  /** Valores de institución detectados (primera hoja) con recuento de filas, para el selector visual. */
+  const institutionPickerOptions = useMemo(() => {
+    if (!firstSheetMeta?.columns?.includes(COL_INST)) return []
+    const rows = firstSheetMeta.rows
+    const counts = new Map()
+    for (const r of rows) {
+      const v = r[COL_INST]
+      if (v == null || v === '') continue
+      const s = String(v).trim()
+      if (!s) continue
+      counts.set(s, (counts.get(s) ?? 0) + 1)
+    }
+    const names = uniqueInstitutionsSorted(rows, firstSheetMeta.columns)
+    return names.map((name) => ({ name, count: counts.get(name) ?? 0 }))
   }, [firstSheetMeta])
 
   const zipOptsKey = useMemo(() => zipInstitutionOptions.join('\u0000'), [zipInstitutionOptions])
@@ -382,15 +400,79 @@ export default function App() {
             suele ser porque el texto de institución no aparece en la columna «Institución o colegio» del archivo.
           </p>
           <div className="mt-5 space-y-4">
-            <label className="block text-sm font-semibold text-slate-800">
-              Institución (contiene)
-              <input className={inputClass} value={institution} onChange={(e) => setInstitution(e.target.value)} />
+            <div className="block text-sm font-semibold text-slate-800">
+              Institución (filtro del informe)
+              {institutionPickerOptions.length > 0 && (
+                <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+                  <p className="text-xs font-medium text-indigo-950/90">
+                    Colegios detectados en «{COL_INST}» (primera hoja del administrador)
+                    {parsed?.names?.length > 1
+                      ? `: ${parsed.names[0]}`
+                      : ''}
+                  </p>
+                  <p className="mt-1 text-xs font-normal text-slate-600">
+                    Pulsa un recuadro para usar ese centro en el informe: el filtro coincide con ese texto y, en modo un
+                    solo archivo, la portada (D2) puede llevar el mismo nombre.
+                  </p>
+                  <div className="mt-3 max-h-48 overflow-y-auto rounded-lg border border-indigo-100/80 bg-white/90 p-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInstitution('')
+                          setInstitutionLabel('')
+                        }}
+                        className={
+                          !institution
+                            ? 'rounded-xl border-2 border-indigo-600 bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white shadow-md shadow-indigo-600/20'
+                            : 'rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-medium text-slate-700 shadow-sm transition hover:border-indigo-200 hover:bg-white'
+                        }
+                      >
+                        Todas las filas
+                        <span className="ml-1 tabular-nums opacity-90">({firstSheetMeta?.rows?.length ?? 0})</span>
+                      </button>
+                      {institutionPickerOptions.map(({ name, count }) => {
+                        const active = institution === name
+                        return (
+                          <button
+                            key={name}
+                            type="button"
+                            onClick={() => {
+                              setInstitution(name)
+                              if (exportMode === 'single') setInstitutionLabel(name)
+                            }}
+                            title={name}
+                            className={
+                              active
+                                ? 'max-w-full rounded-xl border-2 border-indigo-600 bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white shadow-md shadow-indigo-600/20'
+                                : 'max-w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs font-medium text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/40'
+                            }
+                          >
+                            <span className="block min-w-0 max-w-[min(100%,20rem)] break-words leading-snug">{name}</span>
+                            <span className="tabular-nums opacity-90">({count})</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <input
+                className={`${inputClass} ${institutionPickerOptions.length ? 'mt-3' : 'mt-1.5'}`}
+                value={institution}
+                onChange={(e) => setInstitution(e.target.value)}
+                placeholder={
+                  institutionPickerOptions.length
+                    ? 'O escribe un fragmento del nombre (opcional si eliges un recuadro arriba)'
+                    : ''
+                }
+              />
               <span className="mt-1.5 block text-xs font-normal text-slate-500">
-                Debe ser un fragmento del nombre tal como viene en el Excel (sin tilde obligatoria: la comparación no
-                distingue mayúsculas). Si lo dejas vacío, se consideran todas las filas. Si marcas «Incluir otras
-                instituciones», el resto de colegios va a la hoja OTROS.
+                {institutionPickerOptions.length
+                  ? 'Puedes combinar recuadros y texto: el filtro es «contiene», sin distinguir mayúsculas. Vacío = todas las filas. Con «Incluir otras instituciones», el resto va a OTROS.'
+                  : 'Debe ser un fragmento del nombre tal como viene en el Excel (sin tilde obligatoria: la comparación no distingue mayúsculas). Si lo dejas vacío, se consideran todas las filas. Si marcas «Incluir otras instituciones», el resto de colegios va a la hoja OTROS.'}
               </span>
-            </label>
+            </div>
             <label className="block text-sm font-semibold text-slate-800">
               Título de la lectura (celda B7)
               <textarea
