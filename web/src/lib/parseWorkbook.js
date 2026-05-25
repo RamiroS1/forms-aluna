@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { normalizeSheetColumns } from './adminColumns.js'
 
 function uniqueHeaders(headers) {
   const seen = {}
@@ -94,7 +95,7 @@ function workbookToAppModel(wb) {
       })
       return row
     })
-    sheets[name] = { columns, rows }
+    sheets[name] = normalizeSheetColumns({ columns, rows })
   }
 
   return { names, sheets }

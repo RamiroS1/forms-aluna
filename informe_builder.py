@@ -19,13 +19,12 @@ from openpyxl.utils.cell import coordinate_to_tuple
 
 INVALID_SHEET_CHARS = re.compile(r'[\[\]:*?/\\]')
 
-# Columna del export Gravity Forms / administrador
-INST_COL = "Institución o colegio"
-# Siempre requeridos para repartir por hojas (lecturas con distintas columnas de preguntas añaden más columnas, pero no estas)
-REQUIRED_ADMIN_COLS = (
+from admin_columns import (
+    GRADO_COL,
+    GRUPO_COL,
     INST_COL,
-    "Grado",
-    "Indica el número o letra del grado",
+    REQUIRED_ADMIN_COLS,
+    normalize_admin_dataframe_columns,
 )
 
 
@@ -211,8 +210,9 @@ def load_admin_dataframe(
 
     cols = [str(c).strip() for c in df.columns.tolist()]
     df.columns = cols
+    df = normalize_admin_dataframe_columns(df)
     _validate_admin_dataframe_for_report(df)
-    return df, cols
+    return df, list(df.columns)
 
 
 def _validate_admin_dataframe_for_report(df: pd.DataFrame) -> None:
@@ -279,8 +279,8 @@ def split_rows_by_sheet(
     - DataFrame OTROS: según configuración, filas no clasificables y/o otras instituciones
     """
     inst_col = INST_COL
-    grado_col = "Grado"
-    grupo_col = "Indica el número o letra del grado"
+    grado_col = GRADO_COL
+    grupo_col = GRUPO_COL
 
     for c in (inst_col, grado_col, grupo_col):
         if c not in df.columns:

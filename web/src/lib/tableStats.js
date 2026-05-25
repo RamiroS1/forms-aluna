@@ -1,9 +1,8 @@
 import { parseCellToDayISO } from './dateColumns.js'
 import { normalizeCellDisplay } from './cellDisplay.js'
+import { COL_GRADO, COL_GRUPO, COL_INST } from './adminColumns.js'
 
-export const COL_INST = 'Institución o colegio'
-export const COL_GRADO = 'Grado'
-export const COL_GRUPO = 'Indica el número o letra del grado'
+export { COL_GRADO, COL_GRUPO, COL_INST }
 export const COL_NOMBRE = 'Escribe tu nombre completo'
 export const COL_CORREO = 'Correo electrónico'
 

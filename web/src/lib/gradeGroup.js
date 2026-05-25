@@ -1,3 +1,5 @@
+import { COL_GRADO as GRADO, COL_GRUPO as GRUPO, COL_INST as INST } from './adminColumns.js'
+
 /** Coincide con informe_builder.py (filtro de institución). */
 export function institutionMatch(cellValue, needle) {
   if (needle == null || !String(needle).trim()) return true
@@ -48,10 +50,6 @@ export function sheetSortKeyCompare(a, b) {
   if (ga !== gb) return ga - gb
   return String(sa).localeCompare(String(sb), 'es', { numeric: true })
 }
-
-const INST = 'Institución o colegio'
-const GRADO = 'Grado'
-const GRUPO = 'Indica el número o letra del grado'
 
 export function canGroupByGrade(columns) {
   return columns.includes(INST) && columns.includes(GRADO) && columns.includes(GRUPO)
