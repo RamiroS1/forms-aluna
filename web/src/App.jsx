@@ -261,9 +261,9 @@ export default function App() {
           ? 'API en línea. Plantilla por defecto disponible en el servidor.'
           : 'API en línea. Falta FORMATO_LEC en la carpeta del proyecto; sube plantilla al generar.',
       )
-    } catch {
+    } catch (e) {
       setApiErr(
-        'No se pudo conectar con la API. En local: python3 -m uvicorn api.main:app --port 8001 (carpeta automation). En Vercel: configura VITE_API_BASE_URL y CORS en el servidor de la API.',
+        `No se pudo conectar con la API (${apiUrl('/api/health')}). En local (PowerShell), desde la raíz del proyecto: python -m uvicorn api.main:app --host 127.0.0.1 --port 8001 --reload. En Vercel: configura VITE_API_BASE_URL y CORS en el servidor de la API.${e?.message ? ` Detalle: ${e.message}` : ''}`,
       )
     }
   }
